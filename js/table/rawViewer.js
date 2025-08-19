@@ -2,6 +2,7 @@
 import { state } from '../state.js';
 
 let currentIndex = -1;
+let currentMode  = 'raw'; // 'raw' | 'shot'
 
 function fillKV(el, obj){
   const entries = Object.entries(obj || {});
@@ -21,7 +22,48 @@ function setTab(modal, name){
   });
 }
 
-export function openRawView(raw, id, url, tr){
+function applyMode(modal, mode, hasShot){
+  currentMode = mode;
+  const dlg = modal.querySelector('.dm-dialog');
+  dlg.classList.remove('compact','wide');
+
+  // 탭 버튼들
+  const tOverview = modal.querySelector('.dm-tabs .tab[data-pane="overview"]');
+  const tJSON     = modal.querySelector('.dm-tabs .tab[data-pane="json"]');
+  const tShot     = modal.querySelector('.dm-tabs .tab[data-pane="screenshot"]');
+
+  // 콘텐츠 섹션
+  const pOverview = modal.querySelector('.dm-content .pane[data-pane="overview"]');
+  const pJSON     = modal.querySelector('.dm-content .pane[data-pane="json"]');
+  const pShot     = modal.querySelector('.dm-content .pane[data-pane="screenshot"]');
+
+  // 초기화
+  [tOverview,tJSON,tShot,pOverview,pJSON,pShot].forEach(el=>el && el.classList.remove('hidden','active'));
+
+  if(mode==='raw'){
+    // 개요/JSON만 노출
+    if(tShot) tShot.classList.add('hidden');
+    if(pShot) pShot.classList.add('hidden');
+    dlg.classList.add('compact');
+    setTab(modal, 'overview');
+  }else{
+    // 스크린샷만 노출
+    if(tOverview) tOverview.classList.add('hidden');
+    if(pOverview) pOverview.classList.add('hidden');
+    if(tJSON)     tJSON.classList.add('hidden');
+    if(pJSON)     pJSON.classList.add('hidden');
+    dlg.classList.add('wide');
+    setTab(modal, 'screenshot');
+
+    // 스크린샷이 없으면 안내
+    if(!hasShot && pShot){
+      pShot.innerHTML = `<div style="color:#9ca3af">이 도메인의 스크린샷이 없습니다.</div>`;
+    }
+  }
+}
+
+export function openRawView(raw, id, url, tr, opts = {}){
+  const mode = opts.mode || 'raw';
   const modal = document.getElementById('rawModal');
   const link  = document.getElementById('modalLink');
   const kv    = document.getElementById('modalKV');
@@ -40,13 +82,15 @@ export function openRawView(raw, id, url, tr){
   link.href = url || '#';
   link.textContent = (url||'').replace(/^https?:\/\//,'');
 
-  // 개요(KV)
-  fillKV(kv, raw);
-
-  // JSON
-  try{
-    json.textContent = JSON.stringify(raw||{}, null, 2);
-  }catch{ json.textContent = String(raw||''); }
+  // 개요(KV) & JSON(원본 모드에서만 의미)
+  if(mode==='raw'){
+    fillKV(kv, raw);
+    try{ json.textContent = JSON.stringify(raw||{}, null, 2); }
+    catch{ json.textContent = String(raw||''); }
+  }else{
+    kv.innerHTML = '';
+    json.textContent = '';
+  }
 
   // 스크린샷
   shot.innerHTML = '';
@@ -58,12 +102,10 @@ export function openRawView(raw, id, url, tr){
         <img src="${rec.url}" alt="${host}">
       </a>
       <div class="shot-filename" style="margin-top:6px;color:#6b7280">${rec.filename}</div>`;
-  }else{
-    shot.innerHTML = `<div style="color:#9ca3af">이 도메인의 스크린샷이 없습니다.</div>`;
   }
 
-  // 기본 탭: 개요
-  setTab(modal, 'overview');
+  // 모드 적용(탭 가시성/크기)
+  applyMode(modal, mode, !!rec);
 
   // 모달 열기
   modal.classList.add('open');
@@ -79,11 +121,12 @@ export function closeRawView(){
 }
 
 function goto(offset){
+  if(currentMode!=='raw') return; // 스크린샷 전용 모드에서는 네비게이션 비활성
   const next = currentIndex + offset;
   if(next<0 || next>=state.viewRows.length) return;
   const v  = state.viewRows[next];
   const tr = document.querySelector(`#table tbody tr:nth-child(${next+1})`);
-  openRawView(v._raw, v._id, v.url, tr);
+  openRawView(v._raw, v._id, v.url, tr, { mode:'raw' });
 }
 
 export function bindRawModal(){
@@ -93,7 +136,7 @@ export function bindRawModal(){
   const nextBt  = document.getElementById('modalNext');
   const back    = modal.querySelector('.dm-backdrop');
 
-  // 탭
+  // 탭(모드별로 숨김 처리되므로 클릭해도 안전)
   modal.querySelector('.dm-tabs').addEventListener('click', (e)=>{
     const b = e.target.closest('.tab'); if(!b) return;
     setTab(modal, b.dataset.pane);

@@ -306,3 +306,15 @@ th.sortable.sort-desc::after{ border-top-color:#111827; transform:translateY(-2p
 /* 표에서 선택된 행 하이라이트 */
 #table tbody tr.selected{ background:#f3f4f6; }
 
+/* 모달 크기 프리셋 */
+.dm-dialog.compact{
+  width:min(720px, 92vw);
+  height:min(68vh, 720px);
+}
+.dm-dialog.wide{
+  width:min(1200px, 96vw);
+  height:min(92vh, 1000px);
+}
+
+/* 탭/콘텐츠 숨김 유틸 */
+.hidden{ display:none !important; }

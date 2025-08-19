@@ -45,9 +45,9 @@ export function renderTable(){
     const mismatch = v._mismatch
       ? `<span class="pill neut" style="background:#e0e7ff;color:#1e3a8a;">불일치</span>`
       : `-`;
-    const rec = state.images?.latestMap?.get(v.host);
-    const imgCell = rec
-      ? `<button class="icon-btn shot-btn" title="스크린샷 새 탭으로 열기" data-img="${encodeURIComponent(rec.url)}" aria-label="이미지 보기">
+    const hasShot = state.images?.latestMap?.has(v.host);
+    const imgCell = hasShot
+      ? `<button class="icon-btn shot-btn" title="스크린샷 보기" data-host="${v.host}" aria-label="이미지 보기">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"></rect>
             <circle cx="8" cy="12" r="2" fill="currentColor"></circle>
