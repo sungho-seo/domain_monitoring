@@ -16,14 +16,15 @@ import { toast } from './ui/notify.js';
 import { spinnerOn, spinnerOff } from './ui/spinner.js';
 
 const byId = id => document.getElementById(id);
-const DEFAULT_DOMAIN = 'lge.com';
 let RUNS = [''];
+let DOMAINS = Object.keys(CSV_FALLBACK); // ["lge.com","lge.co.kr","lgthinq.com"]
 
 function prettyRun(run){
   if(!run) return '(기본)';
   return /^\d{8}$/.test(run) ? `${run.slice(0,4)}-${run.slice(4,6)}-${run.slice(6,8)}` : run;
 }
 
+/* runs.json이 없으면 data/ 디렉터리에서 날짜 폴더 자동 탐색 */
 async function discoverRunsFromDir(){
   try{
     const html = await fetchText('data/');
@@ -33,7 +34,7 @@ async function discoverRunsFromDir(){
       .map(n=>n.replace(/\/$/,''))
       .filter(n=>/^\d{8}$/.test(n));
     const uniq = [...new Set(names)];
-    return uniq.sort((a,b)=>b.localeCompare(a));
+    return uniq.sort((a,b)=>b.localeCompare(a)); // 최신 먼저
   }catch{
     return [];
   }
@@ -56,20 +57,28 @@ async function loadRuns(){
   }
 }
 
-function populateRunSelect(){
+function populateSelectors(){
+  // 날짜
   const runSel = byId('runSelect');
-  const last = localStorage.getItem('dm:lastRun');
+  const lastRun = localStorage.getItem('dm:lastRun');
   runSel.innerHTML = RUNS.map(r => `<option value="${r}">${prettyRun(r)}</option>`).join('');
-  const initial = (last && RUNS.includes(last)) ? last : (RUNS[0] || '');
-  state.currentRun = runSel.value = initial;
+  state.currentRun = runSel.value = (lastRun && RUNS.includes(lastRun)) ? lastRun : (RUNS[0] || '');
+
+  // 도메인
+  const dsSel = byId('dsSelect');
+  const lastDom = localStorage.getItem('dm:lastDomain');
+  // DOMAINS는 CSV_FALLBACK 키에서 취득
+  dsSel.innerHTML = DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('');
+  state.currentDS = dsSel.value = (lastDom && DOMAINS.includes(lastDom)) ? lastDom : (DOMAINS[0] || 'lge.com');
 }
 
-async function loadDataset(run){
-  state.currentDS = DEFAULT_DOMAIN;
+async function loadDataset(domain, run){
+  state.currentDS = domain;
   state.currentRun = run;
+  localStorage.setItem('dm:lastDomain', domain);
   localStorage.setItem('dm:lastRun', run || '');
 
-  // 스피너 on
+  // 테이블 스피너 on
   const tableHost = document.getElementById('tab-domains') || document.body;
   spinnerOn('table', tableHost);
 
@@ -77,14 +86,14 @@ async function loadDataset(run){
   let rows = []; let note = '';
   try{
     if(run){
-      const text = await fetchText(csvPath(DEFAULT_DOMAIN, run));
+      const text = await fetchText(csvPath(domain, run));
       rows = parseCSV(text);
-      if(!rows.length) note = `CSV가 비어 있거나 파싱된 행이 없습니다. (run=${prettyRun(run)})`;
+      if(!rows.length) note = `CSV가 비어 있거나 파싱된 행이 없습니다. (${domain}, ${prettyRun(run)})`;
     }else{
-      const fb = CSV_FALLBACK[DEFAULT_DOMAIN]?.[0];
+      const fb = CSV_FALLBACK[domain]?.[0];
       const text = await fetchText(fb);
       rows = parseCSV(text);
-      if(!rows.length) note = `CSV가 비어 있거나 파싱된 행이 없습니다. (기본 경로)`;
+      if(!rows.length) note = `CSV가 비어 있거나 파싱된 행이 없습니다. (${domain}, 기본 경로)`;
     }
   }catch(e){
     console.error('[CSV] 로드 실패:', e);
@@ -99,9 +108,14 @@ async function loadDataset(run){
 
   // 이미지 index
   try{
-    state.images = await loadImageIndex(DEFAULT_DOMAIN, run);
-    if(!state.images.all.length){
-      toast('이 날짜에 스크린샷(manifest)이 없거나 비어 있습니다.', 'warn', 4000);
+    state.images = await loadImageIndex(domain, run);
+    // 스크린샷 탭이 현재 열려있다면 즉시 새 목록으로 갱신
+    const shotsActive = document.getElementById('tab-shots')?.classList.contains('active');
+    if(shotsActive){
+      const host = document.getElementById('tab-shots') || document.body;
+      spinnerOn('shots', host);
+      renderShotsStream(document.getElementById('shotsStream'), state.images);
+      spinnerOff('shots');
     }
   }catch(e){
     console.warn('[IMG] 인덱스 실패:', e);
@@ -111,15 +125,20 @@ async function loadDataset(run){
 
   setKPIs();
   renderTable();
-  bindSort();     // 머리글 정렬 바인딩(최초 1회 호출해도 무방하지만 안전하게 갱신)
+  bindSort();     // 헤더 정렬 바인딩(필요 시 갱신)
   applyFilter();
 
   spinnerOff('table');
 }
 
 function bindGlobal(){
-  // 날짜 변경 → 재로딩
-  byId('runSelect').addEventListener('change', (e)=> loadDataset(e.target.value));
+  // 날짜/도메인 변경 → 재로딩
+  byId('runSelect').addEventListener('change', ()=>{
+    loadDataset(byId('dsSelect').value, byId('runSelect').value);
+  });
+  byId('dsSelect').addEventListener('change', ()=>{
+    loadDataset(byId('dsSelect').value, byId('runSelect').value);
+  });
 
   // 표 버튼들
   document.addEventListener('click',(e)=>{
@@ -148,17 +167,18 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     onEnterShots: ()=> {
       const host = document.getElementById('tab-shots') || document.body;
       spinnerOn('shots', host);
-      setTimeout(()=>{
-        renderShotsStream(document.getElementById('shotsStream'), state.images);
-        spinnerOff('shots');
-      }, 0);
+      renderShotsStream(document.getElementById('shotsStream'), state.images);
+      spinnerOff('shots');
+      // ★ 스크린샷 탭에서 Home 플로팅 버튼 표시
+      const home = document.getElementById('btnHome');
+      if (home) home.classList.add('active');  
     }
   });
   bindFilterButtons();
   bindSearch();
   bindGlobal();
 
-  await loadRuns();
-  populateRunSelect();
-  await loadDataset(byId('runSelect').value);
+  await loadRuns();           // 날짜 목록 먼저
+  populateSelectors();        // 날짜/도메인 드롭다운 채우기 (localStorage 복원)
+  await loadDataset(byId('dsSelect').value, byId('runSelect').value); // 초기 로딩
 });

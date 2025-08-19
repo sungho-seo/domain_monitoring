@@ -240,3 +240,5 @@ th.sortable.sort-desc::after{ border-top-color:#111827; transform:translateY(-2p
   padding:10px 12px; margin:8px 0 12px;
 }
 
+.dataset .sel { margin-right: 6px; }
+

@@ -43,15 +43,18 @@
   </div>
 
   <!-- Dataset + Search -->
- <div class="dataset">
-  <label for="runSelect" class="sr-only">모니터링 날짜</label>
-  <select id="runSelect" class="sel" aria-label="모니터링 날짜"></select>
+  <div class="dataset">
+    <label for="runSelect" class="sr-only">모니터링 날짜</label>
+    <select id="runSelect" class="sel" aria-label="모니터링 날짜"></select>
 
-  <span class="spacer"></span>
-  <div class="search">
-    <input id="search" type="search" placeholder="도메인/응답/권고/Status/원본 검색…" aria-label="검색" />
+    <label for="dsSelect" class="sr-only">도메인</label>
+    <select id="dsSelect" class="sel" aria-label="도메인"></select>
+
+    <span class="spacer"></span>
+    <div class="search">
+      <input id="search" type="search" placeholder="도메인/응답/권고/Status/원본 검색…" aria-label="검색" />
+    </div>
   </div>
-</div>
 
   <!-- Domain tab -->
   <div id="tab-domains" class="tab-panel active">
