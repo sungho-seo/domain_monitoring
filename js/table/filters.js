@@ -1,6 +1,8 @@
+// js/table/filters.js
 import { state } from '../state.js';
 import { renderTable } from './render.js';
 import { setKPIs } from '../kpi.js';
+import { sortInPlace } from './sort.js';
 
 export function bindFilterButtons(){
   document.addEventListener('click', async (e)=>{
@@ -14,7 +16,7 @@ export function bindFilterButtons(){
 }
 
 export function applyFilter(){
-  let view=window.__BASE_VIEW__ || []; // 원본(필터/검색 전)
+  let view=window.__BASE_VIEW__ || [];
   // 필터
   if(state.activeFilter==='normal') view=view.filter(v=>v._risk==='normal');
   if(state.activeFilter==='abnormal') view=view.filter(v=>v._risk!=='normal');
@@ -39,7 +41,9 @@ export function applyFilter(){
     );
   }
 
-  // 적용
+  // 정렬
+  sortInPlace(view);
+
   state.viewRows=view;
   setKPIs();
   renderTable();

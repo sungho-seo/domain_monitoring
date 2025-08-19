@@ -11,17 +11,19 @@ import { bindSearch } from './table/search.js';
 import { renderTable } from './table/render.js';
 import { setKPIs } from './kpi.js';
 import { openRawView, closeRawView } from './table/rawViewer.js';
+import { bindSort } from './table/sort.js';
+import { toast } from './ui/notify.js';
+import { spinnerOn, spinnerOff } from './ui/spinner.js';
 
 const byId = id => document.getElementById(id);
-const DEFAULT_DOMAIN = 'lge.com';  // 도메인은 고정(요청에 따라 나중에 UI 다시 붙일 수 있음)
-let RUNS = [''];                   // runs.json 없으면 레거시 경로 사용
+const DEFAULT_DOMAIN = 'lge.com';
+let RUNS = [''];
 
 function prettyRun(run){
   if(!run) return '(기본)';
   return /^\d{8}$/.test(run) ? `${run.slice(0,4)}-${run.slice(4,6)}-${run.slice(6,8)}` : run;
 }
 
-/* runs.json이 없을 때 data/ 디렉터리 인덱스를 파싱해서 날짜 폴더(YYYYMMDD)를 자동 수집 */
 async function discoverRunsFromDir(){
   try{
     const html = await fetchText('data/');
@@ -31,7 +33,7 @@ async function discoverRunsFromDir(){
       .map(n=>n.replace(/\/$/,''))
       .filter(n=>/^\d{8}$/.test(n));
     const uniq = [...new Set(names)];
-    return uniq.sort((a,b)=>b.localeCompare(a)); // 최신 먼저
+    return uniq.sort((a,b)=>b.localeCompare(a));
   }catch{
     return [];
   }
@@ -47,56 +49,79 @@ async function loadRuns(){
     throw new Error('empty runs.json');
   }catch{
     const guessed = await discoverRunsFromDir();
-    RUNS = guessed.length ? guessed : ['']; // 아무 것도 없으면 레거시 모드
+    RUNS = guessed.length ? guessed : [''];
+    if(!guessed.length){
+      toast('runs.json이 없고 data/ 폴더에서 날짜를 찾지 못했어요. (기본 경로 모드)', 'warn', 4500);
+    }
   }
 }
 
 function populateRunSelect(){
   const runSel = byId('runSelect');
+  const last = localStorage.getItem('dm:lastRun');
   runSel.innerHTML = RUNS.map(r => `<option value="${r}">${prettyRun(r)}</option>`).join('');
-  state.currentRun = runSel.value = RUNS[0] || '';
+  const initial = (last && RUNS.includes(last)) ? last : (RUNS[0] || '');
+  state.currentRun = runSel.value = initial;
 }
 
 async function loadDataset(run){
-  const domain = DEFAULT_DOMAIN;     // 고정
-  state.currentDS = domain;
+  state.currentDS = DEFAULT_DOMAIN;
   state.currentRun = run;
+  localStorage.setItem('dm:lastRun', run || '');
 
-  // CSV 로딩
-  let rows = [];
+  // 스피너 on
+  const tableHost = document.getElementById('tab-domains') || document.body;
+  spinnerOn('table', tableHost);
+
+  // CSV
+  let rows = []; let note = '';
   try{
     if(run){
-      const text = await fetchText(csvPath(domain, run));
+      const text = await fetchText(csvPath(DEFAULT_DOMAIN, run));
       rows = parseCSV(text);
+      if(!rows.length) note = `CSV가 비어 있거나 파싱된 행이 없습니다. (run=${prettyRun(run)})`;
     }else{
-      const fb = CSV_FALLBACK[domain]?.[0];
-      if(!fb) throw new Error('fallback path missing');
+      const fb = CSV_FALLBACK[DEFAULT_DOMAIN]?.[0];
       const text = await fetchText(fb);
       rows = parseCSV(text);
+      if(!rows.length) note = `CSV가 비어 있거나 파싱된 행이 없습니다. (기본 경로)`;
     }
   }catch(e){
     console.error('[CSV] 로드 실패:', e);
+    toast('CSV를 불러오지 못했습니다. 경로/권한/파일명을 확인하세요.', 'error', 5000);
+    note = 'CSV 로딩 실패: 경로 또는 권한 문제일 수 있습니다.';
     rows = [];
   }
 
+  state.loadNote = note;
   window.__BASE_VIEW__ = buildView(rows);
   state.viewRows = window.__BASE_VIEW__;
 
-  // 이미지 인덱스 (도메인+날짜)
-  state.images = await loadImageIndex(domain, run);
+  // 이미지 index
+  try{
+    state.images = await loadImageIndex(DEFAULT_DOMAIN, run);
+    if(!state.images.all.length){
+      toast('이 날짜에 스크린샷(manifest)이 없거나 비어 있습니다.', 'warn', 4000);
+    }
+  }catch(e){
+    console.warn('[IMG] 인덱스 실패:', e);
+    toast('스크린샷 목록을 불러오지 못했습니다(manifest 혹은 디렉터리 인덱스).', 'error', 5000);
+    state.images = { latestMap:new Map(), all:[] };
+  }
 
   setKPIs();
   renderTable();
+  bindSort();     // 머리글 정렬 바인딩(최초 1회 호출해도 무방하지만 안전하게 갱신)
   applyFilter();
+
+  spinnerOff('table');
 }
 
 function bindGlobal(){
   // 날짜 변경 → 재로딩
-  byId('runSelect').addEventListener('change', (e)=>{
-    loadDataset(e.target.value);
-  });
+  byId('runSelect').addEventListener('change', (e)=> loadDataset(e.target.value));
 
-  // 표 안의 버튼들
+  // 표 버튼들
   document.addEventListener('click',(e)=>{
     const rawBtn = e.target.closest('button.raw-btn[data-id]');
     if(rawBtn){
@@ -119,13 +144,21 @@ function bindGlobal(){
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
-  setupTabs({ onEnterShots: ()=> renderShotsStream(byId('shotsStream'), state.images) });
+  setupTabs({
+    onEnterShots: ()=> {
+      const host = document.getElementById('tab-shots') || document.body;
+      spinnerOn('shots', host);
+      setTimeout(()=>{
+        renderShotsStream(document.getElementById('shotsStream'), state.images);
+        spinnerOff('shots');
+      }, 0);
+    }
+  });
   bindFilterButtons();
   bindSearch();
   bindGlobal();
 
-  await loadRuns();        // 날짜 목록 확보 (runs.json 또는 디렉터리 스캔)
-  populateRunSelect();     // 드롭다운 채우기
-
-  await loadDataset(byId('runSelect').value);   // 초기 로딩
+  await loadRuns();
+  populateRunSelect();
+  await loadDataset(byId('runSelect').value);
 });
