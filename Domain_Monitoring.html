@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>Domain Monitoring</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/theme.css">
+</head>
+<body>
+  <!-- KPI -->
+  <section class="kpis">
+    <div class="card kpi" style="border-left-color:#e5e7eb">
+      <div class="label">총 도메인</div><div class="value" id="kpi-total">0</div><div class="label" id="kpi-total-sub">-</div>
+    </div>
+    <div class="card kpi green">
+      <div class="label">정상</div><div class="value" id="kpi-normal">0</div><div class="label" id="kpi-normal-sub">-</div>
+    </div>
+    <div class="card kpi amber">
+      <div class="label">주의</div><div class="value" id="kpi-warning">0</div><div class="label" id="kpi-warning-sub">-</div>
+    </div>
+    <div class="card kpi red">
+      <div class="label">긴급</div><div class="value" id="kpi-critical">0</div><div class="label" id="kpi-critical-sub">-</div>
+    </div>
+    <div class="card kpi purple">
+      <div class="label">인증서 만료</div><div class="value" id="kpi-ssl-expired">0</div><div class="label" id="kpi-ssl-expired-sub">-</div>
+    </div>
+    <div class="card kpi blue">
+      <div class="label">인증서 재발급</div><div class="value" id="kpi-ssl-cn">0</div><div class="label" id="kpi-ssl-cn-sub">-</div>
+    </div>
+    <div class="card kpi blue">
+      <div class="label">불일치</div><div class="value" id="kpi-mismatch">0</div><div class="label" id="kpi-mismatch-sub">-</div>
+    </div>
+  </section>
+
+  <!-- Chrome-like Tabs -->
+  <div class="tabsbar">
+    <button class="tab-btn active" data-tab="tab-domains">도메인</button>
+    <button class="tab-btn" data-tab="tab-shots">스크린샷 뷰어</button>
+  </div>
+
+  <!-- Dataset + Search -->
+ <div class="dataset">
+  <label for="runSelect" class="sr-only">모니터링 날짜</label>
+  <select id="runSelect" class="sel" aria-label="모니터링 날짜"></select>
+
+  <span class="spacer"></span>
+  <div class="search">
+    <input id="search" type="search" placeholder="도메인/응답/권고/Status/원본 검색…" aria-label="검색" />
+  </div>
+</div>
+
+  <!-- Domain tab -->
+  <div id="tab-domains" class="tab-panel active">
+    <div class="filters">
+      <button class="btn active" data-filter="all">전체</button>
+      <button class="btn" data-filter="normal">정상</button>
+      <button class="btn" data-filter="abnormal">비정상</button>
+      <button class="btn" data-filter="warning">주의</button>
+      <button class="btn" data-filter="critical">긴급</button>
+      <button class="btn" data-filter="ssl-expired">인증서 만료</button>
+      <button class="btn" data-filter="ssl-cn">인증서 재발급</button>
+      <button class="btn" data-filter="mismatch">불일치</button>
+      <button class="btn" data-filter="manual-invalid">Manual</button>
+      <button class="btn" data-filter="has-screenshot" title="스크린샷이 있는 도메인만 보기">스크린샷</button>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+      <table id="table">
+        <thead>
+          <tr>
+            <th>도메인</th>
+            <th>위험도</th>
+            <th>응답/오류 (단순화)</th>
+            <th>AI 판정</th>
+            <th>수동 판정</th>
+            <th>불일치</th>
+            <th>권고</th>
+            <th>원본</th>
+            <th>이미지</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Screenshots tab -->
+  <div id="tab-shots" class="tab-panel">
+    <div id="shotsStream" class="shots-stream"></div>
+  </div>
+
+  <!-- Floating Home -->
+  <button id="btnHome" class="btn-home" title="맨 위로">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+      <path d="M12 5l-7 7h4v7h6v-7h4l-7-7z" fill="currentColor"/>
+    </svg>
+    Home
+  </button>
+
+  <!-- Raw Viewer -->
+  <div id="rawViewer" class="card raw-viewer">
+    <div class="raw-header">
+      <div class="raw-title" id="rawTitle">원본 행</div>
+      <div class="raw-actions"><button id="closeRaw" class="btn">닫기</button></div>
+    </div>
+    <div id="rawKV"></div>
+    <details style="margin-top:10px">
+      <summary style="font-family:ui-monospace">JSON 보기</summary>
+      <pre id="rawJSON" class="json" style="font-family:ui-monospace">{}</pre>
+    </details>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
