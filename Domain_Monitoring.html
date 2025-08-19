@@ -104,19 +104,42 @@
     Home
   </button>
 
-  <!-- Raw Viewer -->
-  <div id="rawViewer" class="card raw-viewer">
-    <div class="raw-header">
-      <div class="raw-title" id="rawTitle">원본 행</div>
-      <div class="raw-actions"><button id="closeRaw" class="btn">닫기</button></div>
-    </div>
-    <div id="rawKV"></div>
-    <details style="margin-top:10px">
-      <summary style="font-family:ui-monospace">JSON 보기</summary>
-      <pre id="rawJSON" class="json" style="font-family:ui-monospace">{}</pre>
-    </details>
-  </div>
-
   <script type="module" src="js/app.js"></script>
+
+  <!-- Raw Modal -->
+<div id="rawModal" class="dm-modal" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="dm-backdrop"></div>
+  <div class="dm-dialog" role="document">
+    <div class="dm-header">
+      <div class="dm-title">
+        <a id="modalLink" href="#" target="_blank" rel="noopener">domain</a>
+      </div>
+      <div class="dm-actions">
+        <button class="btn" id="modalPrev" title="이전(←)">←</button>
+        <button class="btn" id="modalNext" title="다음(→)">→</button>
+        <button class="btn" id="modalClose" title="닫기(ESC)">닫기</button>
+      </div>
+    </div>
+
+    <div class="dm-tabs" role="tablist" aria-label="원본 보기 탭">
+      <button class="tab active" data-pane="overview" role="tab" aria-selected="true">개요</button>
+      <button class="tab" data-pane="json" role="tab" aria-selected="false">JSON</button>
+      <button class="tab" data-pane="screenshot" role="tab" aria-selected="false">스크린샷</button>
+    </div>
+
+    <div class="dm-content">
+      <section data-pane="overview" class="pane active" role="tabpanel">
+        <div id="modalKV" class="kv"></div>
+      </section>
+      <section data-pane="json" class="pane" role="tabpanel">
+        <pre id="modalJSON" class="json" style="font-family:ui-monospace"></pre>
+      </section>
+      <section data-pane="screenshot" class="pane" role="tabpanel">
+        <div id="modalShotWrap"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

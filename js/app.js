@@ -10,21 +10,22 @@ import { bindFilterButtons, applyFilter } from './table/filters.js';
 import { bindSearch } from './table/search.js';
 import { renderTable } from './table/render.js';
 import { setKPIs } from './kpi.js';
-import { openRawView, closeRawView } from './table/rawViewer.js';
+import { openRawView, closeRawView, bindRawModal } from './table/rawViewer.js';
 import { bindSort } from './table/sort.js';
 import { toast } from './ui/notify.js';
 import { spinnerOn, spinnerOff } from './ui/spinner.js';
 
 const byId = id => document.getElementById(id);
-let RUNS = [''];
-let DOMAINS = Object.keys(CSV_FALLBACK); // ["lge.com","lge.co.kr","lgthinq.com"]
+
+let RUNS = [''];                                  // runs.json 없으면 레거시 모드
+let DOMAINS = Object.keys(CSV_FALLBACK || {});    // ["lge.com","lge.co.kr","lgthinq.com"]
 
 function prettyRun(run){
   if(!run) return '(기본)';
   return /^\d{8}$/.test(run) ? `${run.slice(0,4)}-${run.slice(4,6)}-${run.slice(6,8)}` : run;
 }
 
-/* runs.json이 없으면 data/ 디렉터리에서 날짜 폴더 자동 탐색 */
+/** runs.json이 없으면 data/ 디렉터리 인덱스에서 날짜 폴더(YYYYMMDD) 자동 탐색 */
 async function discoverRunsFromDir(){
   try{
     const html = await fetchText('data/');
@@ -65,9 +66,9 @@ function populateSelectors(){
   state.currentRun = runSel.value = (lastRun && RUNS.includes(lastRun)) ? lastRun : (RUNS[0] || '');
 
   // 도메인
+  if(!DOMAINS.length){ DOMAINS = ['lge.com']; }
   const dsSel = byId('dsSelect');
   const lastDom = localStorage.getItem('dm:lastDomain');
-  // DOMAINS는 CSV_FALLBACK 키에서 취득
   dsSel.innerHTML = DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('');
   state.currentDS = dsSel.value = (lastDom && DOMAINS.includes(lastDom)) ? lastDom : (DOMAINS[0] || 'lge.com');
 }
@@ -82,7 +83,7 @@ async function loadDataset(domain, run){
   const tableHost = document.getElementById('tab-domains') || document.body;
   spinnerOn('table', tableHost);
 
-  // CSV
+  // CSV 로딩
   let rows = []; let note = '';
   try{
     if(run){
@@ -106,16 +107,18 @@ async function loadDataset(domain, run){
   window.__BASE_VIEW__ = buildView(rows);
   state.viewRows = window.__BASE_VIEW__;
 
-  // 이미지 index
+  // 이미지 index (도메인+날짜)
   try{
     state.images = await loadImageIndex(domain, run);
-    // 스크린샷 탭이 현재 열려있다면 즉시 새 목록으로 갱신
     const shotsActive = document.getElementById('tab-shots')?.classList.contains('active');
     if(shotsActive){
       const host = document.getElementById('tab-shots') || document.body;
       spinnerOn('shots', host);
       renderShotsStream(document.getElementById('shotsStream'), state.images);
       spinnerOff('shots');
+      // 스크린샷 탭에서 Home 버튼 보이기
+      const home = document.getElementById('btnHome');
+      if (home) home.classList.add('active');
     }
   }catch(e){
     console.warn('[IMG] 인덱스 실패:', e);
@@ -146,20 +149,24 @@ function bindGlobal(){
     if(rawBtn){
       const id = Number(rawBtn.getAttribute('data-id'));
       const item = state.viewRows.find(v=>v._id===id);
-      if(item){ const tr=rawBtn.closest('tr'); openRawView(item._raw,id,item.url,tr); }
+      if(item){
+        const tr=rawBtn.closest('tr');
+        openRawView(item._raw, id, item.url, tr);   // 모달 오픈
+      }
       return;
     }
     const shotBtn = e.target.closest('button.shot-btn[data-img]');
-    if(shotBtn){ window.open(decodeURIComponent(shotBtn.getAttribute('data-img')),'_blank','noopener'); return; }
+    if(shotBtn){
+      window.open(decodeURIComponent(shotBtn.getAttribute('data-img')),'_blank','noopener');
+      return;
+    }
   });
 
-  // Home / ESC
+  // Home / ESC(모달 ESC는 rawViewer.js에서 처리)
   byId('btnHome').addEventListener('click',()=>{
     const topEl=document.querySelector('.tabsbar');
     (topEl||document.body).scrollIntoView({behavior:'smooth',block:'start'});
   });
-  byId('closeRaw').addEventListener('click', closeRawView);
-  window.addEventListener('keydown',(ev)=>{ if(ev.key==='Escape') closeRawView(); });
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
@@ -169,14 +176,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       spinnerOn('shots', host);
       renderShotsStream(document.getElementById('shotsStream'), state.images);
       spinnerOff('shots');
-      // ★ 스크린샷 탭에서 Home 플로팅 버튼 표시
+      // 스크린샷 탭에서 Home 플로팅 버튼 표시
       const home = document.getElementById('btnHome');
-      if (home) home.classList.add('active');  
+      if (home) home.classList.add('active');
     }
   });
+
   bindFilterButtons();
   bindSearch();
   bindGlobal();
+  bindRawModal();     // ★ 모달 초기화
 
   await loadRuns();           // 날짜 목록 먼저
   populateSelectors();        // 날짜/도메인 드롭다운 채우기 (localStorage 복원)

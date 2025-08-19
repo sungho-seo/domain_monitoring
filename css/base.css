@@ -242,3 +242,67 @@ th.sortable.sort-desc::after{ border-top-color:#111827; transform:translateY(-2p
 
 .dataset .sel { margin-right: 6px; }
 
+/* === 도메인 테이블 내 아이콘 버튼(원본/이미지) 회색 톤 강화 === */
+/* 활성 */
+.table-wrap .icon-btn{
+  background: #e5e7eb;     /* 기존보다 진한 회색 */
+  color: #4b5563;          /* 아이콘 선/텍스트 */
+  border: 1px solid #cbd5e1;
+}
+.table-wrap .icon-btn:hover{
+  background: #d1d5db;     /* hover 시 더 진하게 */
+  color: #111827;
+  border-color: #94a3b8;
+}
+
+/* 비활성 */
+.table-wrap .icon-btn.disabled,
+.table-wrap .icon-btn[disabled]{
+  background: #f9fafb;     /* 활성보다 한 톤 밝게 */
+  color: #cbd5e1;          /* 아이콘 연한 회색 */
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+  opacity: 1;              /* 흐릿해 보이지 않도록 유지 */
+}
+
+/* 키보드 포커스 접근성 */
+.table-wrap .icon-btn:focus-visible{
+  outline: 2px solid #9ca3af;
+  outline-offset: 2px;
+}
+
+/* ===== Raw Modal ===== */
+.dm-modal{ position:fixed; inset:0; display:none; z-index:1200; }
+.dm-modal.open{ display:block; }
+.dm-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
+.dm-dialog{
+  position:relative; z-index:2; background:#fff;
+  width:min(960px, 92vw); height:min(84vh, 900px);
+  margin:6vh auto 0; border-radius:12px;
+  box-shadow:0 24px 64px rgba(0,0,0,.28);
+  display:flex; flex-direction:column;
+}
+.dm-header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #e5e7eb; }
+.dm-title a{ color:#111827; text-decoration:none; }
+.dm-actions .btn{ background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; padding:6px 10px; border-radius:6px; }
+.dm-actions .btn:hover{ background:#e5e7eb; }
+
+.dm-tabs{ display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid #e5e7eb; }
+.dm-tabs .tab{ background:#f3f4f6; border:1px solid #e5e7eb; padding:6px 10px; border-radius:6px; }
+.dm-tabs .tab.active{ background:#4b5563; color:#fff; border-color:#4b5563; }
+
+.dm-content{ flex:1; overflow:auto; padding:12px; }
+.pane{ display:none; }
+.pane.active{ display:block; }
+
+/* key-value grid */
+.kv{ display:grid; grid-template-columns:150px 1fr; gap:6px 10px; }
+.kv .k{ color:#6b7280; }
+.kv .v{ color:#111827; word-break:break-all; }
+
+/* screenshot */
+#modalShotWrap img{ max-width:100%; height:auto; border:1px solid #e5e7eb; border-radius:8px; }
+
+/* 표에서 선택된 행 하이라이트 */
+#table tbody tr.selected{ background:#f3f4f6; }
+
