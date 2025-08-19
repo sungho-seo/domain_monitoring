@@ -318,3 +318,21 @@ th.sortable.sort-desc::after{ border-top-color:#111827; transform:translateY(-2p
 
 /* 탭/콘텐츠 숨김 유틸 */
 .hidden{ display:none !important; }
+
+/* KPI 카드가 툴팁/레이어에 가려져도 클릭 통과 */
+.kpis [data-tip],
+.kpis [role="tooltip"],
+.kpis .tooltip,
+.kpis .balloon{ pointer-events: none; }
+.kpis .card.kpi{ cursor:pointer; }
+
+/* 도메인 테이블 헤더 고정 */
+.table-wrap{ position:relative; overflow:auto; }
+#table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #fff;
+  box-shadow: 0 1px 0 #e5e7eb, 0 2px 8px rgba(0,0,0,.03);
+}
+

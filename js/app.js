@@ -9,7 +9,7 @@ import { setupTabs } from './ui/tabs.js';
 import { bindFilterButtons, applyFilter } from './table/filters.js';
 import { bindSearch } from './table/search.js';
 import { renderTable } from './table/render.js';
-import { setKPIs } from './kpi.js';
+import { setKPIs, bindKPICards } from './kpi.js';
 import { openRawView, closeRawView, bindRawModal } from './table/rawViewer.js';
 import { bindSort } from './table/sort.js';
 import { toast } from './ui/notify.js';
@@ -107,9 +107,11 @@ async function loadDataset(domain, run){
     rows = [];
   }
 
+  // 전체/뷰 분리
   state.loadNote = note;
   window.__BASE_VIEW__ = buildView(rows);
-  state.viewRows = window.__BASE_VIEW__;
+  state.baseRows = window.__BASE_VIEW__;       // KPI는 항상 이 기준
+  state.viewRows = state.baseRows.slice();     // 필터/검색/정렬용
 
   // 이미지 index (도메인+날짜)
   try{
@@ -122,7 +124,6 @@ async function loadDataset(domain, run){
       const shotsStream = byId('shotsStream');
       renderShotsStream(shotsStream, state.images);
       spinnerOff('shots');
-      // 스크린샷 탭에서 Home 버튼 보이기
       const home = byId('btnHome');
       if (home) home.classList.add('active');
     }
@@ -132,10 +133,11 @@ async function loadDataset(domain, run){
     state.images = { latestMap:new Map(), all:[] };
   }
 
+  // KPI는 baseRows 기준으로 고정 계산
   setKPIs();
   renderTable();
-  bindSort();     // 헤더 정렬 바인딩(필요 시 갱신)
-  applyFilter();
+  bindSort();     // 머리글 정렬 바인딩
+  applyFilter();  // viewRows에 필터/검색/정렬 적용
 
   spinnerOff('table');
 }
@@ -167,7 +169,6 @@ function bindGlobal(){
     const shotBtn = e.target.closest('button.shot-btn[data-host]');
     if(shotBtn){
       const tr = shotBtn.closest('tr');
-      // 같은 행의 raw-btn에서 id를 얻어 원본 url/context를 보존
       let v = null;
       const rawInRow = tr ? tr.querySelector('button.raw-btn[data-id]') : null;
       if(rawInRow){
@@ -175,11 +176,28 @@ function bindGlobal(){
         v = (state.viewRows || []).find(function(x){ return x._id === rid; });
       }
       const host = shotBtn.getAttribute('data-host');
-      const url  = v && v.url ? v.url : (host ? ('https://' + host) : '#');
-      const id   = v && typeof v._id !== 'undefined' ? v._id : -1;
-      openRawView(v && v._raw ? v._raw : {}, id, url, tr, { mode:'shot' });
+      const url  = (v && v.url) ? v.url : (host ? ('https://' + host) : '#');
+      const id   = (v && typeof v._id !== 'undefined') ? v._id : -1;
+      openRawView((v && v._raw) ? v._raw : {}, id, url, tr, { mode:'shot' });
       return;
     }
+  });
+
+  // KPI에서 온 커스텀 이벤트 → 필터 적용
+  document.addEventListener('dm:set-filter', function(ev){
+    var f = ev && ev.detail && ev.detail.filter ? ev.detail.filter : 'all';
+
+    // 1) 모듈 state에 직접 반영 (중요!)
+    state.activeFilter = f;
+
+    // 2) 필터 버튼 active 표시 동기화
+    var btns = document.querySelectorAll('.filters .btn');
+    Array.prototype.forEach.call(btns, function(b){ b.classList.remove('active'); });
+    var selBtn = document.querySelector('.filters .btn[data-filter="'+f+'"]');
+    if(selBtn){ selBtn.classList.add('active'); }
+
+    // 3) 실제 필터 적용 (이미 import되어 있으므로 바로 호출)
+    applyFilter();
   });
 
   // Home (모달 ESC는 rawViewer.js에서 처리)
@@ -198,7 +216,6 @@ document.addEventListener('DOMContentLoaded', async function(){
       const shotsStream = byId('shotsStream');
       renderShotsStream(shotsStream, state.images);
       spinnerOff('shots');
-      // 스크린샷 탭에서 Home 플로팅 버튼 표시
       const home = byId('btnHome');
       if (home) home.classList.add('active');
     }
@@ -208,6 +225,7 @@ document.addEventListener('DOMContentLoaded', async function(){
   bindSearch();
   bindGlobal();
   bindRawModal();     // 멀티모달 초기화
+  bindKPICards();     // KPI 카드 클릭 → 필터 연동
 
   await loadRuns();           // 날짜 목록 먼저
   populateSelectors();        // 날짜/도메인 드롭다운 채우기 (localStorage 복원)

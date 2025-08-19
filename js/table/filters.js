@@ -1,50 +1,58 @@
 // js/table/filters.js
 import { state } from '../state.js';
 import { renderTable } from './render.js';
-import { setKPIs } from '../kpi.js';
 import { sortInPlace } from './sort.js';
+import { markKPIActive } from '../kpi.js';
 
 export function bindFilterButtons(){
-  document.addEventListener('click', async (e)=>{
-    const fbtn=e.target.closest('.filters .btn');
+  document.addEventListener('click', function(e){
+    const fbtn = e.target.closest('.filters .btn');
     if(!fbtn) return;
-    document.querySelectorAll('.filters .btn').forEach(b=>b.classList.remove('active'));
+    Array.prototype.forEach.call(document.querySelectorAll('.filters .btn'), function(b){
+      b.classList.remove('active');
+    });
     fbtn.classList.add('active');
-    state.activeFilter=fbtn.dataset.filter||'all';
+    state.activeFilter = fbtn.dataset.filter || 'all';
+
+    // KPI 카드 active 하이라이트 동기화
+    markKPIActive(state.activeFilter);
     applyFilter();
   });
 }
 
 export function applyFilter(){
-  let view=window.__BASE_VIEW__ || [];
+  // 항상 원본에서 시작
+  var view = (state.baseRows || []).slice();
+
   // 필터
-  if(state.activeFilter==='normal') view=view.filter(v=>v._risk==='normal');
-  if(state.activeFilter==='abnormal') view=view.filter(v=>v._risk!=='normal');
-  if(state.activeFilter==='warning') view=view.filter(v=>v._risk==='warning');
-  if(state.activeFilter==='critical') view=view.filter(v=>v._risk==='critical');
-  if(state.activeFilter==='ssl-expired') view=view.filter(v=>v.simplified==='Cert Expired');
-  if(state.activeFilter==='ssl-cn') view=view.filter(v=>v.simplified==='Cert CN Mismatch');
-  if(state.activeFilter==='manual-invalid') view=view.filter(v=>(v._manualStatus||'').toLowerCase()==='invalid');
-  if(state.activeFilter==='mismatch') view=view.filter(v=>v._mismatch);
-  if(state.activeFilter==='has-screenshot'){ view=view.filter(v=> state.images.latestMap.has(v.host)); }
+  if(state.activeFilter==='normal') view = view.filter(function(v){ return v._risk==='normal'; });
+  if(state.activeFilter==='abnormal') view = view.filter(function(v){ return v._risk!=='normal'; });
+  if(state.activeFilter==='warning') view = view.filter(function(v){ return v._risk==='warning'; });
+  if(state.activeFilter==='critical') view = view.filter(function(v){ return v._risk==='critical'; });
+  if(state.activeFilter==='ssl-expired') view = view.filter(function(v){ return v.simplified==='Cert Expired'; });
+  if(state.activeFilter==='ssl-cn') view = view.filter(function(v){ return v.simplified==='Cert CN Mismatch'; });
+  if(state.activeFilter==='manual-invalid') view = view.filter(function(v){ return (String(v._manualStatus||'').toLowerCase()==='invalid'); });
+  if(state.activeFilter==='mismatch') view = view.filter(function(v){ return !!v._mismatch; });
+  if(state.activeFilter==='has-screenshot') view = view.filter(function(v){ return state.images.latestMap.has(v.host); });
 
   // 검색
   if(state.searchQuery){
-    const q=state.searchQuery.toLowerCase();
-    view=view.filter(v=>
-      v.url.toLowerCase().includes(q) ||
-      (v._manualStatus||'').toLowerCase().includes(q) ||
-      v.simplified.toLowerCase().includes(q) ||
-      v._risk.toLowerCase().includes(q) ||
-      v.advice.toLowerCase().includes(q) ||
-      JSON.stringify(v._raw||{}).toLowerCase().includes(q)
-    );
+    const q = state.searchQuery.toLowerCase();
+    view = view.filter(function(v){
+      return (
+        (v.url||'').toLowerCase().includes(q) ||
+        (String(v._manualStatus||'')).toLowerCase().includes(q) ||
+        (v.simplified||'').toLowerCase().includes(q) ||
+        (v._risk||'').toLowerCase().includes(q) ||
+        (v.advice||'').toLowerCase().includes(q) ||
+        JSON.stringify(v._raw||{}).toLowerCase().includes(q)
+      );
+    });
   }
 
   // 정렬
   sortInPlace(view);
 
-  state.viewRows=view;
-  setKPIs();
-  renderTable();
+  state.viewRows = view;
+  renderTable(); // KPI는 baseRows 기준이므로 여기서 재계산하지 않음
 }
