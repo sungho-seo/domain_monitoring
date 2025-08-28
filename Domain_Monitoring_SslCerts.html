@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Domain Monitoring</title>
+  <style>
+    :root{
+      --bg:#0b0e13; --panel:#121824; --muted:#8a93a5; --text:#e8edf7; --accent:#4da3ff;
+      --warn:#ffb020; --error:#ff5470; --ok:#36d399; --border:#233146;
+      /* Rolled-back (darker) rows */
+      --row:#1d2436; --row2:#182033;
+      --thead:#111a2a;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Apple SD Gothic Neo,Pretendard,Apple Color Emoji,Noto Color Emoji,Segoe UI Emoji;}
+    header{padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:20}
+    h1{margin:0;font-size:18px;color:#d6e3ff}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+    select,button,input[type="text"]{background:#0f1521;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    select:focus,button:focus,input[type="text"]:focus{outline:2px solid var(--accent);outline-offset:1px}
+    button{cursor:pointer}
+    button.ghost{background:transparent}
+    .tabs{display:flex;gap:8px;margin-top:8px}
+    .tab{padding:6px 12px;border-radius:999px;border:1px solid var(--border)}
+    .tab.active{background:var(--accent);color:#001733;border-color:transparent}
+
+    .wrap{padding:16px 20px}
+    .kpis{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));gap:12px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:12px}
+    .card h3{margin:0 0 4px 0;font-size:13px;color:var(--muted);font-weight:600}
+    .card .val{font-size:28px;letter-spacing:.5px}
+    .badge{font-weight:500 !important;display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);margin-left:6px}
+
+    .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+    .chip{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0f1521;color:var(--text);font-size:13px}
+    .chip.active{background:#173054;border-color:#2d4f7a}
+    .chip.warn{border-color:#61420e;background:#1b1406}
+    .chip.error{border-color:#6a1a26;background:#1c0b0e}
+
+    table{width:100%;border-collapse:separate;border-spacing:0 6px}
+    thead th{
+      position:sticky; top:0; z-index:5;
+      background:var(--thead);
+      font-size:12px;color:#aeb8cc;text-align:left;padding:8px 10px;white-space:nowrap;
+      border-bottom:1px solid var(--border);
+      box-shadow:0 2px 0 rgba(0,0,0,.15);
+      cursor:pointer;
+    }
+    tbody tr{background:var(--row);border:1px solid var(--border)}
+    tbody tr:nth-child(even){background:var(--row2)}
+    tbody td{padding:10px;vertical-align:top;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+    tbody tr td:first-child{border-left:1px solid var(--border);border-top-left-radius:12px;border-bottom-left-radius:12px}
+    tbody tr td:last-child{border-right:1px solid var(--border);border-top-right-radius:12px;border-bottom-right-radius:12px}
+    .muted{color:var(--muted)}
+    tbody td a{ color: var(--text); text-decoration: underline dotted; }
+    tbody td a:hover{ text-decoration: underline; }
+
+    .row-actions{display:flex;gap:8px}
+    .icon-btn{opacity:.85;filter:grayscale(30%);transition:opacity .15s ease}
+    .icon-btn:hover{opacity:1;filter:grayscale(0%)}
+    .icon-btn[disabled]{opacity:.35;filter:grayscale(100%);pointer-events:none}
+
+    .grid{display:grid;gap:12px}
+
+    /* FAB */
+    #homeFab{position:fixed;right:16px;bottom:16px;z-index:999;background:#A50034;color:#fff;border:none;border-radius:999px;padding:12px 16px;font-weight:700;display:none;box-shadow:0 6px 16px rgba(165,0,52,.35)}
+    #homeFab:hover{opacity:.95}
+
+    /* Modals */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
+    .modal .box{background:#0f1521;border:1px solid var(--border);border-radius:14px;max-width:92vw;max-height:86vh;overflow:auto;padding:14px}
+    .modal .box h4{margin:0 0 10px 0}
+    pre{white-space:pre-wrap;word-break:break-word;background:#0b1220;border:1px solid #142239;border-radius:10px;padding:10px;color:#d0dcf7}
+
+    /* Screenshot pane center alignment */
+    #shotPane{display:flex;flex-direction:column;align-items:center;gap:16px}
+    .shot-meta{width:100%;max-width:980px;display:flex;justify-content:space-between;align-items:center;color:#aeb8cc;font-size:13px}
+    .shot-img{max-width:980px;width:100%;display:block;margin:0 auto;border:1px solid #1b2740;border-radius:10px}
+
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Domain Monitoring</h1>
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="domain">도메인</button>
+      <button class="tab" data-tab="screenshot">스크린샷 뷰어</button>
+    </div>
+    <div class="toolbar">
+      <label class="sr-only" for="runSelect">날짜</label>
+      <select id="runSelect" title="날짜(run)"></select>
+      <label class="sr-only" for="dsSelect">도메인</label>
+      <select id="dsSelect" title="도메인(domain)"></select>
+      <input id="search" type="text" placeholder="검색(호스트/이슈/발급자 등)" style="min-width:240px" />
+      <button id="reloadBtn" class="ghost">새로고침</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- Domain Tab -->
+    <section id="tab-domain">
+      <!-- KPI Cards -->
+      <div class="kpis" id="kpis">
+        <div class="card" data-kpi="expired"><h3>인증서 만료</h3><div class="val" id="kpiExpired">0</div></div>
+        <div class="card" data-kpi="exp7"><h3>임박 ≤7일 <span class="badge">days_to_expiry</span></h3><div class="val" id="kpiExp7">0</div></div>
+        <div class="card" data-kpi="exp30"><h3>임박 ≤30일</h3><div class="val" id="kpiExp30">0</div></div>
+        <div class="card" data-kpi="mismatch"><h3>CN/SAN 불일치</h3><div class="val" id="kpiMismatch">0</div></div>
+        <div class="card" data-kpi="tlsfail"><h3>TLS 핸드셰이크 실패</h3><div class="val" id="kpiTLS">0</div></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters" id="filterBar">
+        <button class="chip error" data-filter="expired">만료</button>
+        <button class="chip warn" data-filter="expiring_7d">임박≤7일</button>
+        <button class="chip" data-filter="expiring_30d">임박≤30일</button>
+        <button class="chip" data-filter="mismatch">불일치(CN/SAN)</button>
+        <button class="chip" data-filter="tls_fail">TLS 실패</button>
+        <button class="chip" data-filter="insecure">검증우회 감지</button>
+        <button class="chip" data-filter="http_downgrade">HTTP 다운그레이드</button>
+        <button class="chip" data-filter="http2xx">2xx</button>
+        <button class="chip" data-filter="http3xx">3xx</button>
+        <button class="chip" data-filter="http4xx">4xx</button>
+        <button class="chip" data-filter="http5xx">5xx</button>
+        <select id="issuerFilter" title="발급자(issuer)"><option value="">발급자 전체</option></select>
+      </div>
+
+      <!-- Domain Table -->
+      <div class="grid">
+        <table id="domainTable"><thead><tr id="theadRow"></tr></thead><tbody id="tbody"></tbody></table>
+        <div id="emptyState" class="muted" style="display:none">데이터가 없습니다.</div>
+      </div>
+    </section>
+
+    <!-- Screenshot Tab -->
+    <section id="tab-screenshot" style="display:none">
+      <div id="shotPane" class="grid"></div>
+    </section>
+  </div>
+
+  <button id="homeFab">HOME</button>
+
+  <!-- Raw Modal -->
+  <div class="modal" id="rawModal"><div class="box" style="min-width:320px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h4 id="rawTitle">원본(개요/JSON)</h4><button id="rawClose" class="ghost">닫기</button></div><pre id="rawPre"></pre></div></div>
+  <!-- Screenshot Modal (per-row, multi-image) -->
+  <div class="modal" id="shotModal"><div class="box"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h4>스크린샷</h4><button id="shotClose" class="ghost">닫기</button></div><div id="shotWrap"></div></div></div>
+
+  <script>
+    // ===== Config =====
+    var ROWS_PER_VIEW = 15; function CACHE_BUST(){ return 'v='+Date.now(); }
+    var DATA_ROOT='data'; var IMAGE_ROOT='images'; var OUTPUT_ROOT='output';
+    var FALLBACK_DOMAINS=['lge.com','lge.co.kr','lgthinq.com'];
+    var FLAT_RUN_LABEL='__flat__';
+
+    // ===== Utilities =====
+    function qs(s){return document.querySelector(s);} function qsa(s){return Array.prototype.slice.call(document.querySelectorAll(s));} function byId(id){return document.getElementById(id);} function withBust(u){return u+(u.indexOf('?')>-1?'&':'?')+CACHE_BUST();}
+    function fetchText(u){return fetch(withBust(u)).then(function(r){if(!r.ok) throw new Error('HTTP '+r.status+' @'+u); return r.text();});}
+    function fetchJSON(u){return fetch(withBust(u)).then(function(r){if(!r.ok) throw new Error('HTTP '+r.status+' @'+u); return r.json();});}
+    function checkExists(u){return fetch(withBust(u)).then(function(r){return r.ok;}).catch(function(){return false;});}
+    function toBool(v){if(typeof v==='boolean')return v; if(v==null) return false; var s=String(v).trim().toLowerCase(); return s==='true'||s==='1'||s==='yes';}
+    function parseFloatSafe(v){var n=parseFloat(v); return isNaN(n)?null:n;}
+    function getParam(k){var m=location.search.match(new RegExp('[?&]'+k+'=([^&]+)')); return m?decodeURIComponent(m[1]):'';}
+    function toast(m){console.log('[INFO]',m);}
+
+    // ===== CSV parser =====
+    function parseCsv(t){var L=t.replace(/\r/g,'').split('\n'); if(!L.length) return {headers:[],rows:[]}; var H=parseCsvLine(L[0]); var rows=[]; for(var i=1;i<L.length;i++){ if(!L[i]||!L[i].trim()) continue; var V=parseCsvLine(L[i]); var o={}; for(var j=0;j<H.length;j++) o[H[j]]=typeof V[j]!=='undefined'?V[j]:''; rows.push(o);} return {headers:H,rows:rows};}
+    function parseCsvLine(line){var out=[],cur='',inQ=false,i=0; while(i<line.length){var ch=line[i]; if(ch==='"'){ if(inQ && line[i+1]==='"'){cur+='"'; i+=2; continue;} inQ=!inQ; i++; continue;} if(ch===','&&!inQ){out.push(cur); cur=''; i++; continue;} cur+=ch; i++;} out.push(cur); return out;}
+
+    // ===== Helpers =====
+    function registrableDomain(host){ if(!host) return ''; var H=String(host).toLowerCase().split('.'); if(H.length<2) return host; var end2=H.slice(-2).join('.'); var end3=H.slice(-3).join('.'); var multi=['co.kr','or.kr','go.kr','ne.kr','re.kr','ac.kr','co.jp','com.au','co.uk']; if(multi.indexOf(end2)>-1){ if(H.length>=3) return end3; } return end2; }
+    function csvg(arr){ return (arr&&arr.length)?arr.length:0; }
+
+    // ===== URL + Manifest (filename host-matching) =====
+    function normUrl(u){
+      if(!u) return '';
+      u = String(u).trim();
+      if(!/^https?:\/\//i.test(u)){ u='https://'+u; }
+      try {
+        var url = new URL(u);
+        var proto = url.protocol.toLowerCase();
+        var host = url.hostname.toLowerCase();
+        var path = url.pathname || '/';
+        var port = url.port && !((proto==='http:' && url.port==='80')||(proto==='https:' && url.port==='443')) ? (':'+url.port) : '';
+        if(path.length>1 && path.endsWith('/')) path = path.slice(0,-1);
+        return proto+'//'+host+port+path;
+      } catch(e){
+        return u.toLowerCase();
+      }
+    }
+    function hostnameFromAny(u){
+      if(!u) return '';
+      try{ return new URL(normUrl(u)).hostname.toLowerCase(); }catch(e){ return String(u).replace(/^https?:\/\//,'').split('/')[0].toLowerCase(); }
+    }
+    function rowHostname(row){
+      var u = row['normalized_url'] || row['input_url'] || row['final_url'] || row['host'] || '';
+      return hostnameFromAny(u || row['host']);
+    }
+    function hostFromManifestName(name){
+      // expects "...__<host>__..."
+      var s=String(name||''); var parts=s.split('__');
+      if(parts.length>=3){ return parts[1].toLowerCase(); }
+      var m=s.match(/__([a-z0-9.-]+\.[a-z]{2,})__/i); return m?m[1].toLowerCase():'';
+    }
+    function getImagesForRowFromManifest(manifest, row){
+      var h=rowHostname(row);
+      if(!h) return [];
+      var list=[];
+      if(Array.isArray(manifest) && manifest.length && typeof manifest[0]==='string'){
+        for(var i=0;i<manifest.length;i++){
+          var name=manifest[i];
+          if(hostFromManifestName(name)===h){ list.push(name); }
+        }
+        return list;
+      }
+      // Fallbacks
+      if(Array.isArray(manifest)){
+        for(var j=0;j<manifest.length;j++){
+          var it=manifest[j]||{}; var mu=it.url||it.href||it.link;
+          if(mu && hostnameFromAny(mu)===h){
+            var arr=it.files||it.images||it.imgs||it.paths||it.path||it.file||it.img||[];
+            if(typeof arr==='string') list.push(arr); else if(Array.isArray(arr)) list=list.concat(arr);
+          }
+        }
+        return list;
+      }
+      if(manifest && Array.isArray(manifest.items)){
+        for(var k=0;k<manifest.items.length;k++){
+          var it2=manifest.items[k]||{}; var mu2=it2.url||it2.href||it2.link;
+          if(mu2 && hostnameFromAny(mu2)===h){
+            var arr2=it2.files||it2.images||it2.imgs||it2.paths||it2.path||it2.file||it2.img||[];
+            if(typeof arr2==='string') list.push(arr2); else if(Array.isArray(arr2)) list=list.concat(arr2);
+          }
+        }
+        return list;
+      }
+      if(manifest && typeof manifest==='object'){
+        for(var key in manifest){
+          if(!manifest.hasOwnProperty(key)) continue;
+          if(/^https?:\/\//i.test(key)){
+            if(hostnameFromAny(key)===h){
+              var v=manifest[key];
+              if(typeof v==='string') list.push(v);
+              else if(Array.isArray(v)) list=list.concat(v);
+            }
+          }
+        }
+      }
+      return list;
+    }
+    function hasImagesForRow(manifest, row){
+      var imgs=getImagesForRowFromManifest(manifest, row);
+      return imgs && imgs.length>0;
+    }
+
+    // ===== Runs & Domains =====
+    function loadRunsListSmart(){
+      return fetchJSON(DATA_ROOT+'/runs.json').then(function(a){ if(a&&a.length) return a; throw new Error('empty runs.json'); })
+      .catch(function(){
+        return fetchText(DATA_ROOT+'/').then(function(html){ var tmp=document.createElement('div'); tmp.innerHTML=html; var as=tmp.getElementsByTagName('a'); var runs=[]; for(var i=0;i<as.length;i++){ var href=(as[i].getAttribute('href')||'').replace(/\/$/,''); if(/^\d{8}$/.test(href)) runs.push(href);} runs.sort(function(a,b){return a<b?1:(a>b?-1:0);}); if(runs.length) return runs; throw new Error('no index'); })
+        .catch(function(){
+          var r=getParam('run'); if(/^\d{8}$/.test(r)) return [r];
+          var checks=FALLBACK_DOMAINS.map(function(d){return checkExists(DATA_ROOT+'/'+d+'_ssl_audit.csv');});
+          return Promise.all(checks).then(function(arr){ if(arr.some(function(x){return x;})) return [FLAT_RUN_LABEL]; throw new Error('no runs source'); });
+        });
+      });
+    }
+
+    function orderDomains(doms){
+      var order=FALLBACK_DOMAINS.slice(0);
+      return doms.slice(0).sort(function(a,b){
+        var ia=order.indexOf(a), ib=order.indexOf(b);
+        if(ia>-1&&ib>-1) return ia-ib;
+        if(ia>-1) return -1;
+        if(ib>-1) return 1;
+        return a.localeCompare(b);
+      });
+    }
+
+    function loadDomainsByRunSmart(run){
+      if(run===FLAT_RUN_LABEL){
+        var checks = FALLBACK_DOMAINS.map(function(d){ return checkExists(DATA_ROOT+'/'+d+'_ssl_audit.csv').then(function(ok){ return ok?d:null; }); });
+        return Promise.all(checks).then(function(list){ var doms=list.filter(function(x){return !!x;}); if(!doms.length) throw new Error('도메인 CSV를 찾을 수 없습니다.'); return {mode:'perdomain', domains:orderDomains(doms)}; });
+      }
+      var url=OUTPUT_ROOT+'/'+run+'/ssl_audit_result_reclassified.csv';
+      return fetch(withBust(url)).then(function(r){
+        if(!r.ok) throw new Error('no consolidated');
+        return r.text();
+      }).then(function(t){
+        var csv=parseCsv(t); var dmap={};
+        for(var i=0;i<csvg(csv.rows);i++){ var h=(csv.rows[i]['host']||'').toLowerCase(); if(h){ dmap[registrableDomain(h)]=true; } }
+        var doms=orderDomains(Object.keys(dmap));
+        return {mode:'consolidated', domains:doms, consolidatedCsv:csv};
+      }).catch(function(){
+        return fetchText(DATA_ROOT+'/'+run+'/').then(function(html){
+          var tmp=document.createElement('div'); tmp.innerHTML=html; var as=tmp.getElementsByTagName('a'); var doms=[];
+          for(var i=0;i<as.length;i++){
+            var href=as[i].getAttribute('href')||''; var m=href.match(/^(.*)_ssl_audit\.csv$/i);
+            if(m&&m[1]){ if(doms.indexOf(m[1])===-1) doms.push(m[1]); }
+          }
+          doms=orderDomains(doms);
+          if(doms.length) return {mode:'perdomain', domains:doms};
+          var checks = FALLBACK_DOMAINS.map(function(d){ return checkExists(DATA_ROOT+'/'+d+'_ssl_audit.csv').then(function(ok){ return ok?d:null; }); });
+          return Promise.all(checks).then(function(list){ var ds=list.filter(Boolean); if(!ds.length) throw new Error('도메인 CSV를 찾을 수 없습니다.'); return {mode:'perdomain', domains:orderDomains(ds)}; });
+        });
+      });
+    }
+
+    // ===== Data Loaders =====
+    function loadConsolidated(run){ var url=OUTPUT_ROOT+'/'+run+'/ssl_audit_result_reclassified.csv'; return fetchText(url).then(function(t){ return parseCsv(t); }); }
+    function loadPerDomain(run, domain){
+      var urlRun = DATA_ROOT+'/'+run+'/'+domain+'_ssl_audit.csv';
+      var urlFlat = DATA_ROOT+'/'+domain+'_ssl_audit.csv';
+      return fetchText(urlRun).catch(function(){ return fetchText(urlFlat); }).then(function(t){ return parseCsv(t); });
+    }
+
+    // ===== State =====
+    var STATE={ run:'', domain:'', mode:'perdomain', headers:[], rows:[], filters:{}, search:'', issuer:'', manifest:null };
+
+    // ===== KPI =====
+    function calcKPIs(rows){ function b(x){return toBool(x);} var k={expired:0,exp7:0,exp30:0,mismatch:0,tlsfail:0}; for(var i=0;i<rows.length;i++){ var r=rows[i]; if(b(r['expired'])) k.expired++; if(b(r['expiring_7d'])) k.exp7++; if(b(r['expiring_30d'])) k.exp30++; var mis=b(r['cert_mismatch'])||(String(r['hostname_match']||'').toLowerCase()==='false'); if(mis) k.mismatch++; if(String(r['tls_handshake_ok']||'').toLowerCase()==='false') k.tlsfail++; } return k; }
+    function renderKPIsForRows(pool){ var k=calcKPIs(pool||[]); byId('kpiExpired').textContent=k.expired; byId('kpiExp7').textContent=k.exp7; byId('kpiExp30').textContent=k.exp30; byId('kpiMismatch').textContent=k.mismatch; byId('kpiTLS').textContent=k.tlsfail; }
+
+    // ===== Filters =====
+    function toggleFilter(key){ STATE.filters[key]=!STATE.filters[key]; renderTable(); syncFilterChips(); }
+    function clearFilters(){ STATE.filters={}; STATE.search=''; byId('search').value=''; byId('issuerFilter').value=''; STATE.issuer=''; renderTable(); syncFilterChips(); }
+    function syncFilterChips(){ qsa('.filters .chip').forEach(function(el){ var f=el.getAttribute('data-filter'); if(!f) return; var on=!!STATE.filters[f]; if(on) el.classList.add('active'); else el.classList.remove('active'); el.setAttribute('aria-pressed', on?'true':'false'); }); }
+
+    // counts now computed as: (issuer/search 조건만 적용) + (해당 칩 단독)
+    function rowMatchesFilters(r){
+      function b(x){return toBool(x);} var preds=[];
+      if(STATE.filters['expired']) preds.push(function(x){return b(x['expired']);});
+      if(STATE.filters['expiring_7d']) preds.push(function(x){return b(x['expiring_7d']);});
+      if(STATE.filters['expiring_30d']) preds.push(function(x){return b(x['expiring_30d']);});
+      if(STATE.filters['mismatch']) preds.push(function(x){return b(x['cert_mismatch'])||(String(x['hostname_match']||'').toLowerCase()==='false');});
+      if(STATE.filters['tls_fail']) preds.push(function(x){ return String(x['tls_handshake_ok']||'').toLowerCase()==='false'; });
+      if(STATE.filters['insecure']) preds.push(function(x){return toBool(x['has_insecure_note']);});
+      if(STATE.filters['http_downgrade']) preds.push(function(x){ if(toBool(x['final_is_http'])) return true; var rc=String(x['redirect_chain']||''); return rc.indexOf('http://')>-1; });
+      if(STATE.filters['http2xx']) preds.push(function(x){ var s=parseFloatSafe(x['http_status']); return s!=null&&s>=200&&s<300; });
+      if(STATE.filters['http3xx']) preds.push(function(x){ var s=parseFloatSafe(x['http_status']); return s!=null&&s>=300&&s<400; });
+      if(STATE.filters['http4xx']) preds.push(function(x){ var s=parseFloatSafe(x['http_status']); return s!=null&&s>=400&&s<500; });
+      if(STATE.filters['http5xx']) preds.push(function(x){ var s=parseFloatSafe(x['http_status']); return s!=null&&s>=500; });
+      if(STATE.issuer){ preds.push(function(x){ return String(x['issuer_cn']||'').toLowerCase()===STATE.issuer; }); }
+      if(STATE.search){ var needle=STATE.search.toLowerCase(); preds.push(function(x){ var cols=['input_url','normalized_url','host','issuer_cn','http_note','error','final_url']; for(var i=0;i<cols.length;i++){ var v=String(x[cols[i]]||'').toLowerCase(); if(v.indexOf(needle)>-1) return true; } return false; }); }
+      for(var i=0;i<preds.length;i++){ if(!preds[i](r)) return false; } return true;
+    }
+    function rowMatchesWithSingleFilter(r, key){
+      var temp={}; temp[key]=true;
+      var saved=STATE.filters; STATE.filters=temp;
+      var ok=rowMatchesFilters(r);
+      STATE.filters=saved;
+      return ok;
+    }
+    function computeFilterCounts(pool){
+      var keys=['expired','expiring_7d','expiring_30d','mismatch','tls_fail','insecure','http_downgrade','http2xx','http3xx','http4xx','http5xx'];
+      var counts={};
+      for(var k=0;k<keys.length;k++){
+        var key=keys[k]; var cnt=0;
+        for(var i=0;i<pool.length;i++){ if(rowMatchesWithSingleFilter(pool[i], key)) cnt++; }
+        counts[key]=cnt;
+      }
+      return counts;
+    }
+    function updateFilterChips(pool){
+      var counts=computeFilterCounts(pool);
+      qsa('.filters .chip').forEach(function(el){
+        var key=el.getAttribute('data-filter'); if(!key) return;
+        var baseLabel = el.getAttribute('data-label') || el.textContent.replace(/\(.*\)$/,'').trim();
+        el.setAttribute('data-label', baseLabel);
+        var n = counts[key]||0;
+        el.textContent = baseLabel + ' ('+ n +')';
+        el.disabled = (n===0);
+      });
+    }
+
+    // ===== Table =====
+    var SORT={key:'severity',dir:'desc'};
+    function chooseRowUrl(r){
+      var u = r['normalized_url'] || r['input_url'] || '';
+      if(!u){ var h=String(r['host']||''); if(h){ if(!/^https?:\/\//i.test(h)) u='https://'+h; else u=h; } }
+      return u;
+    }
+    function setHeaders(headers){
+      var thead=byId('theadRow'); thead.innerHTML='';
+      var cols=['host','http_status','expired','expiring_7d','expiring_30d','hostname_match','cert_mismatch','tls_handshake_ok','final_is_http','issuer_cn','days_to_expiry','severity','recommended_action','screenshot','row_actions'];
+      var present=[];
+      for(var i=0;i<cols.length;i++){ if(cols[i]==='row_actions'||cols[i]==='screenshot'||headers.indexOf(cols[i])>-1) present.push(cols[i]); }
+      present.forEach(function(h){
+        var th=document.createElement('th'); th.setAttribute('data-key',h); th.style.cursor='pointer'; th.textContent=(h==='screenshot')?'이미지':h;
+        th.addEventListener('click',function(){ onSort(h); }); thead.appendChild(th);
+      });
+      STATE.headers=present;
+    }
+    function onSort(key){ if(SORT.key===key){ SORT.dir=SORT.dir==='asc'?'desc':'asc'; } else { SORT.key=key; SORT.dir='asc'; } renderTable(); }
+    function sortRows(rows){
+      var k=SORT.key,dir=SORT.dir; var arr=rows.slice(0);
+      arr.sort(function(a,b){
+        var va=a[k]; var vb=b[k]; var na=parseFloatSafe(va), nb=parseFloatSafe(vb);
+        if(na!=null&&nb!=null) return dir==='asc'?(na-nb):(nb-na);
+        va=String(va||''); vb=String(vb||'');
+        if(va<vb) return dir==='asc'?-1:1; if(va>vb) return dir==='asc'?1:-1; return 0;
+      });
+      return arr;
+    }
+
+    function renderTable(){
+      var tbody=byId('tbody'); tbody.innerHTML='';
+      var run=STATE.run, domain=STATE.domain; var pool=[];
+      if(STATE.mode==='consolidated'){ for(var i=0;i<STATE.rows.length;i++){ var r=STATE.rows[i]; var rd=registrableDomain(r['host']||''); if(!domain||rd===domain) pool.push(r);} }
+      else { pool=STATE.rows.slice(0); }
+
+      renderKPIsForRows(pool);
+
+      // Load manifest once per render to detect per-row availability
+      var base=IMAGE_ROOT+'/img.'+domain+'/'+run+'/manifest.json';
+      fetchJSON(base).then(function(manifest){
+        STATE.manifest = manifest;
+        var rows=[]; for(var i=0;i<pool.length;i++){ var r=pool[i]; if(rowMatchesFilters(r)) rows.push(r); }
+        rows=sortRows(rows); byId('emptyState').style.display=rows.length?'none':'block';
+
+        // issuer options
+        var issuers={}; for(var i=0;i<pool.length;i++){ var ic=String(pool[i]['issuer_cn']||'').toLowerCase(); if(ic) issuers[ic]=true; }
+        var issuerSel=byId('issuerFilter'); var prev=issuerSel.value||'';
+        issuerSel.innerHTML='<option value=\"\">발급자 전체</option>'+Object.keys(issuers).sort().map(function(x){return '<option value=\"'+x+'\">'+x+'</option>';}).join('');
+        issuerSel.value=prev;
+
+        // update filter chips counts (stable per chip)
+        updateFilterChips(pool);
+
+        // build rows
+        for(var r=0;r<rows.length;r++){
+          var tr=document.createElement('tr');
+          for(var c=0;c<STATE.headers.length;c++){
+            var key=STATE.headers[c]; var td=document.createElement('td');
+            if(key==='row_actions'){
+              var wrap=document.createElement('div'); wrap.className='row-actions';
+              var raw=document.createElement('button'); raw.className='icon-btn'; raw.title='원본 보기'; raw.textContent='🔎';
+              (function(rowData){ raw.addEventListener('click', function(){ openRowJson(rowData); }); })(rows[r]);
+              wrap.appendChild(raw); td.appendChild(wrap);
+            } else if(key==='screenshot'){
+              var btn=document.createElement('button'); btn.className='icon-btn'; btn.textContent='🖼️';
+              var enabled = hasImagesForRow(manifest, rows[r]);
+              btn.title = enabled ? '스크린샷 보기' : '스크린샷 없음';
+              if(!enabled){ btn.disabled=true; }
+              else { (function(rowData){ btn.addEventListener('click', function(){ openScreenshotModal(run, domain, rowData); }); })(rows[r]); }
+              td.appendChild(btn);
+            } else if(key==='host'){
+              var u = chooseRowUrl(rows[r]) || '#'; var a=document.createElement('a');
+              a.href=u; a.textContent=rows[r]['host']||u; a.target='_blank'; a.rel='noopener';
+              td.appendChild(a);
+            } else {
+              var val=rows[r][key]; if(typeof val==='boolean'){ td.textContent=val?'true':'false'; } else { td.textContent=val==null?'':String(val); }
+            }
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+      }).catch(function(){ // manifest missing → disable all screenshot icons
+        STATE.manifest = null;
+        var rows=[]; for(var i=0;i<pool.length;i++){ var r=pool[i]; if(rowMatchesFilters(r)) rows.push(r); }
+        rows=sortRows(rows); byId('emptyState').style.display=rows.length?'none':'block';
+
+        var issuers={}; for(var i=0;i<pool.length;i++){ var ic=String(pool[i]['issuer_cn']||'').toLowerCase(); if(ic) issuers[ic]=true; }
+        var issuerSel=byId('issuerFilter'); var prev=issuerSel.value||'';
+        issuerSel.innerHTML='<option value=\"\">발급자 전체</option>'+Object.keys(issuers).sort().map(function(x){return '<option value=\"'+x+'\">'+x+'</option>';}).join('');
+        issuerSel.value=prev;
+
+        updateFilterChips(pool);
+
+        for(var r=0;r<rows.length;r++){
+          var tr=document.createElement('tr');
+          for(var c=0;c<STATE.headers.length;c++){
+            var key=STATE.headers[c]; var td=document.createElement('td');
+            if(key==='row_actions'){
+              var wrap=document.createElement('div'); wrap.className='row-actions';
+              var raw=document.createElement('button'); raw.className='icon-btn'; raw.title='원본 보기'; raw.textContent='🔎';
+              (function(rowData){ raw.addEventListener('click', function(){ openRowJson(rowData); }); })(rows[r]);
+              wrap.appendChild(raw); td.appendChild(wrap);
+            } else if(key==='screenshot'){
+              var btn=document.createElement('button'); btn.className='icon-btn'; btn.textContent='🖼️';
+              btn.title = '스크린샷 없음'; btn.disabled=true; td.appendChild(btn);
+            } else if(key==='host'){
+              var u = chooseRowUrl(rows[r]) || '#'; var a=document.createElement('a');
+              a.href=u; a.textContent=rows[r]['host']||u; a.target='_blank'; a.rel='noopener';
+              td.appendChild(a);
+            } else {
+              var val=rows[r][key]; if(typeof val==='boolean'){ td.textContent=val?'true':'false'; } else { td.textContent=val==null?'':String(val); }
+            }
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+      });
+    }
+
+    // ===== Modals / Raw =====
+    function openRowJson(row){ byId('rawTitle').textContent='행 원본 JSON'; byId('rawPre').textContent=JSON.stringify(row,null,2); byId('rawModal').style.display='flex'; }
+    function openJsonModal(title,obj){ byId('rawTitle').textContent=title||'JSON'; byId('rawPre').textContent=JSON.stringify(obj,null,2); byId('rawModal').style.display='flex'; }
+    document.addEventListener('DOMContentLoaded', function(){ var x=byId('rawClose'); if(x){ x.addEventListener('click',function(){ byId('rawModal').style.display='none'; }); } });
+
+    // ===== Screenshot Pane (Tab) =====
+    function showTab(name){
+      var d=byId('tab-domain'), s=byId('tab-screenshot');
+      if(!d||!s) return;
+      d.style.display = (name==='screenshot')?'none':'block';
+      s.style.display = (name==='screenshot')?'block':'none';
+      updateToolbarForTab(name);
+      setHomeFabVisible(true);
+      if(name==='screenshot'){ renderScreenshotTab(''); }
+    }
+    function updateToolbarForTab(name){
+      byId('search').style.display = (name==='screenshot')?'none':'inline-block';
+      byId('reloadBtn').style.display = (name==='screenshot')?'none':'inline-block';
+    }
+    function renderScreenshotTab(host){
+      var run=STATE.run, domain=STATE.domain;
+      var base=IMAGE_ROOT+'/img.'+domain+'/'+run+'/';
+      var pane=byId('shotPane'); if(!pane) return; pane.innerHTML='';
+      fetchJSON(base+'manifest.json').then(function(m){
+        STATE.manifest = m;
+        var imgs=[];
+        if(Array.isArray(m) && m.length && typeof m[0]==='string'){ imgs = m; }
+        else if(Array.isArray(m) && m.length && typeof m[0]==='object'){
+          for(var i=0;i<m.length;i++){ var it=m[i]||{}; var arr=it.files||it.images||it.imgs||it.paths||it.path||it.file||it.img||[]; if(typeof arr==='string') imgs.push(arr); else if(Array.isArray(arr)) imgs=imgs.concat(arr); }
+        } else if(Array.isArray(m.items)){
+          for(var j=0;j<m.items.length;j++){ var it2=m.items[j]||{}; var arr2=it2.files||it2.images||it2.imgs||it2.paths||it2.path||it2.file||it2.img||[]; if(typeof arr2==='string') imgs.push(arr2); else if(Array.isArray(arr2)) imgs=imgs.concat(arr2); }
+        } else if(typeof m==='object'){
+          for(var k in m){ if(!m.hasOwnProperty(k)) continue; if(/^https?:\/\//i.test(k)){ var v=m[k]; if(typeof v==='string') imgs.push(v); else if(Array.isArray(v)) imgs=imgs.concat(v); } }
+          if(!imgs.length && Array.isArray(m.files)) imgs = m.files;
+          if(!imgs.length && Array.isArray(m.images)) imgs = m.images;
+        }
+        if(!imgs||!imgs.length){ pane.innerHTML='<div class=\"muted\">이미지가 없습니다.</div>'; return; }
+        var total=imgs.length;
+        for(var i2=0;i2<imgs.length;i2++){
+          var file=String(imgs[i2]);
+          var head=document.createElement('div'); head.className='shot-meta';
+          head.innerHTML='<div>'+file+'</div><div>['+(i2+1)+'/'+total+'] <button class=\"ghost\" data-file=\"'+file+'\">RAW</button></div>';
+          var img=document.createElement('img'); img.className='shot-img'; img.src=base+file+'?'+CACHE_BUST();
+          pane.appendChild(head); pane.appendChild(img);
+          (function(f){ head.querySelector('button').addEventListener('click', function(){ openJsonModal('이미지 정보', {run:run, domain:domain, file:f}); }); })(file);
+        }
+      }).catch(function(){ pane.innerHTML='<div class=\"muted\">manifest.json을 찾을 수 없습니다.</div>'; });
+    }
+
+    // ===== Screenshot Modal for per-row icon (filename host-matched) =====
+    function openScreenshotModal(run, domain, row){
+      var base = IMAGE_ROOT + '/img.' + domain + '/' + run + '/';
+      fetchJSON(base + 'manifest.json').then(function(m){
+        var w=byId('shotWrap'); w.innerHTML='';
+        var imgs = getImagesForRowFromManifest(m, row);
+        if(!imgs || !imgs.length){ w.innerHTML='<div class=\"muted\">해당 URL 매칭 이미지가 없습니다.</div>'; }
+        else {
+          var total=imgs.length;
+          for(var n=0;n<imgs.length;n++){
+            var file = String(imgs[n]);
+            var meta=document.createElement('div'); meta.className='shot-meta';
+            meta.innerHTML='<div>'+file+'</div><div>['+(n+1)+'/'+total+'] <button class=\"ghost\" data-file=\"'+file+'\">RAW</button></div>';
+            var img=document.createElement('img'); img.className='shot-img'; img.src = base + file + '?' + CACHE_BUST();
+            w.appendChild(meta); w.appendChild(img);
+            (function(f){ meta.querySelector('button').addEventListener('click', function(){ openJsonModal('이미지 정보', {run:run, domain:domain, file:f, host:rowHostname(row)}); }); })(file);
+          }
+        }
+        byId('shotModal').style.display='flex';
+      }).catch(function(){ var w=byId('shotWrap'); w.innerHTML='<div class=\"muted\">manifest.json을 찾을 수 없습니다.</div>'; byId('shotModal').style.display='flex'; });
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+      var x=byId('shotClose'); if(x){ x.addEventListener('click', function(){ byId('shotModal').style.display='none'; }); }
+    });
+
+    function setHomeFabVisible(v){
+      if(!window.__fabBound){
+        window.__fabBound=true;
+        var fn=function(){ byId('homeFab').style.display=(window.scrollY>200)?'block':'none'; };
+        window.addEventListener('scroll', fn);
+        window.addEventListener('resize', fn);
+        fn();
+      } else {
+        byId('homeFab').style.display=(window.scrollY>200)?'block':'none';
+      }
+    }
+
+    // ===== Init & Binding =====
+    function bind(){
+      // tabs
+      qsa('.tab').forEach(function(el){
+        el.addEventListener('click', function(){
+          qsa('.tab').forEach(function(t){ t.classList.remove('active'); });
+          el.classList.add('active');
+          var tab=el.getAttribute('data-tab');
+          if(tab==='screenshot'){ showTab('screenshot'); }
+          else { showTab('domain'); }
+        });
+      });
+
+      qsa('.filters .chip').forEach(function(el){
+        el.addEventListener('click', function(){ if(el.disabled) return; toggleFilter(el.getAttribute('data-filter')); });
+      });
+      byId('issuerFilter').addEventListener('change',function(){ STATE.issuer=this.value; renderTable(); });
+      byId('search').addEventListener('input',function(){ STATE.search=this.value||''; renderTable(); });
+
+      byId('runSelect').addEventListener('change',function(){ STATE.run=this.value; localStorage.setItem('dm.run',STATE.run); onRunChange(); });
+      byId('dsSelect').addEventListener('change',function(){ STATE.domain=this.value; localStorage.setItem('dm.domain',STATE.domain); if(STATE.mode==='consolidated'){ renderTable(); renderScreenshotTab(''); } else { loadAndRender(); renderScreenshotTab(''); } });
+      byId('reloadBtn').addEventListener('click',function(){ if(STATE.mode==='consolidated'){ renderTable(); } else { loadAndRender(true); } });
+      byId('homeFab').addEventListener('click',function(){ window.scrollTo(0,0); });
+      byId('kpis').addEventListener('click',function(e){
+        var card=e.target.closest('[data-kpi]'); if(!card) return; var k=card.getAttribute('data-kpi');
+        clearFilters();
+        if(k==='expired') STATE.filters['expired']=true;
+        if(k==='exp7') STATE.filters['expiring_7d']=true;
+        if(k==='exp30') STATE.filters['expiring_30d']=true;
+        if(k==='mismatch') STATE.filters['mismatch']=true;
+        if(k==='tlsfail') STATE.filters['tls_fail']=true;
+        syncFilterChips(); renderTable();
+      });
+    }
+
+    function onRunChange(){
+      loadDomainsByRunSmart(STATE.run).then(function(info){
+        STATE.mode=info.mode;
+        var sel=byId('dsSelect'); sel.innerHTML='';
+        var doms=(info.domains&&info.domains.length)?info.domains:FALLBACK_DOMAINS.slice(0);
+        // keep FALLBACK order; default to lge.com if available (ignoring previous localStorage if not present)
+        for(var i=0;i<doms.length;i++){ var opt=document.createElement('option'); opt.value=doms[i]; opt.textContent=doms[i]; sel.appendChild(opt); }
+        var last=localStorage.getItem('dm.domain')||'';
+        if(last && doms.indexOf(last)>-1){ sel.value=last; STATE.domain=last; }
+        else if(doms.indexOf('lge.com')>-1){ sel.value='lge.com'; STATE.domain='lge.com'; }
+        else { STATE.domain=doms[0]||''; sel.value=STATE.domain; }
+
+        if(info.mode==='consolidated' && info.consolidatedCsv){
+          STATE.headers=info.consolidatedCsv.headers; STATE.rows=info.consolidatedCsv.rows; setHeaders(STATE.headers); renderTable(); renderScreenshotTab(''); return;
+        }
+        if(STATE.domain){
+          loadPerDomain(STATE.run,STATE.domain).then(function(csv){
+            STATE.headers=csv.headers; STATE.rows=csv.rows; setHeaders(STATE.headers); renderTable(); renderScreenshotTab('');
+          }).catch(function(e){ toast('로딩 실패: '+e.message); });
+        }
+      }).catch(function(e){ toast('런 로딩 실패: '+e); });
+    }
+
+    function loadAndRender(){
+      if(!STATE.run){ return; }
+      if(STATE.mode==='consolidated'){
+        loadConsolidated(STATE.run).then(function(csv){ STATE.headers=csv.headers; STATE.rows=csv.rows; setHeaders(STATE.headers); renderTable(); }).catch(function(e){ toast('로딩 실패: '+e.message); });
+      } else {
+        if(!STATE.domain){ byId('tbody').innerHTML=''; return; }
+        loadPerDomain(STATE.run,STATE.domain).then(function(csv){ STATE.headers=csv.headers; STATE.rows=csv.rows; setHeaders(STATE.headers); renderTable(); }).catch(function(e){ toast('로딩 실패: '+e.message); });
+      }
+    }
+
+    (function init(){
+      bind();
+      var lastRun=localStorage.getItem('dm.run')||'';
+      loadRunsListSmart().then(function(runs){
+        var sel=byId('runSelect');
+        sel.innerHTML=runs.map(function(r){ return '<option value=\"'+r+'\">'+(r===FLAT_RUN_LABEL?'(flat) CSV':' '+r)+'</option>'; }).join('');
+        if(lastRun&&runs.indexOf(lastRun)>-1){ sel.value=lastRun; STATE.run=lastRun; } else { STATE.run=runs[0]||''; sel.value=STATE.run; }
+        onRunChange();
+      }).catch(function(e){ toast('런 목록을 불러오지 못했습니다: '+e); });
+    })();
+  </script>
+</body>
+</html>
